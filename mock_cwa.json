@@ -5,24 +5,45 @@
       {
         "StationId": "C0A9F0",
         "StationName": "Mock Station – 坡地 A",
-        "Latitude": 25.0330,
+        "Latitude": 25.033,
         "Longitude": 121.5654,
-        "RainfallElement": { "Now": { "Precipitation": 2.5 } }
+        "RainfallElement": {
+          "Now": {
+            "Precipitation": 2.5
+          }
+        }
       },
       {
         "StationId": "C0B120",
         "StationName": "Mock Station – 坡地 B（暴雨測試）",
         "Latitude": 25.0478,
         "Longitude": 121.5319,
-        "RainfallElement": { "Now": { "Precipitation": 10.0 } }
+        "RainfallElement": {
+          "Now": {
+            "Precipitation": 10.0
+          }
+        }
       },
       {
         "StationId": "C0C330",
         "StationName": "Mock Station – 下游 C",
         "Latitude": 25.0797,
         "Longitude": 121.5486,
-        "RainfallElement": { "Now": { "Precipitation": 0.5 } }
+        "RainfallElement": {
+          "Now": {
+            "Precipitation": 0.5
+          }
+        }
       }
     ]
+  },
+  "simulation": {
+    "continuous_heavy": {
+      "initialExtraMm": 2.0,
+      "growthPerStepMm": 0.45,
+      "maxExtraMm": 15.0,
+      "jitterMm": 0.7,
+      "description": "連續豪雨模擬：每次更新代表10分鐘，雨量逐步增加；非真實觀測。"
+    }
   }
 }

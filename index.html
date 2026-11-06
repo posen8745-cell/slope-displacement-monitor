@@ -135,7 +135,7 @@
 <header>
   <h1>順向坡雨量警戒模擬</h1>
   <div class="sub">
-    純模擬資料：優先讀取 mock_cwa.json，未提供時使用內建示範站。<br/>每次更新推進模擬時間 10 分鐘；24h／72h 為已收集模擬資料的累計，未滿時段不代表完整累計。<br/>本頁沒有位移感測資料，燈號僅依自訂雨量門檻顯示，不代表實際坡地安全判定。<br/>
+    純模擬資料：優先讀取 mock_cwa.json，未提供時使用內建示範站；可切換一般降雨與連續豪雨情境。<br/>每次更新推進模擬時間 10 分鐘；24h／72h 為已收集模擬資料的累計，未滿時段不代表完整累計。<br/>本頁沒有位移感測資料，燈號僅依自訂雨量門檻顯示，不代表實際坡地安全判定。<br/>
     具備監測感：心跳、倒數、進度條、更新閃爍、事件 Log、風險升級提示（可嗶聲）。
   </div>
 </header>
@@ -161,6 +161,13 @@
       <button class="secondary" id="btnPickMax">自動選：最大雨量</button>
       <button class="secondary" id="btnPickNear">自動選：最近站</button>
     </div>
+
+    <label>降雨模擬情境</label>
+    <select id="scenarioSelect">
+      <option value="normal">一般降雨（原始隨機模式）</option>
+      <option value="continuous_heavy" selected>連續豪雨（逐步增強）</option>
+    </select>
+    <div class="small" id="scenarioDesc" style="margin-top:6px">連續豪雨：每次更新模擬 10 分鐘，持續降雨並隨時間逐步增強；雨量為虛構數值。</div>
 
     <label>畫面更新頻率（每次模擬10分鐘）</label>
     <select id="pollSec">
@@ -280,6 +287,8 @@ let histMap = {};
 let timer = null;
 let activePollMs = 600000;
 let simulationTime = Date.now();
+let scenarioSteps = 0;
+let scenarioConfig = {};
 
 // monitoring feel state
 let nextTickAt = null;
@@ -384,6 +393,7 @@ async function fetchStationsFromMock(){
     const res = await fetch("./mock_cwa.json", { cache:"no-store", signal: AbortSignal.timeout(8000) });
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
+    scenarioConfig = json?.simulation?.continuous_heavy || {};
     const arr = json?.records?.Station;
     if(!Array.isArray(arr) || !arr.length) throw new Error("沒有站點");
     const seen = new Set();
@@ -392,6 +402,7 @@ async function fetchStationsFromMock(){
     logEvent("已載入外部模擬站點；雨量仍為隨機示範資料");
     return valid;
   } catch(e) {
+    scenarioConfig = {};
     logEvent("未載入外部設定，使用內建虛構示範站與模擬雨量");
     return [
       {StationId:'DEMO01',StationName:'虛構示範站A',Latitude:25.03,Longitude:121.56,Precipitation:1},
@@ -681,6 +692,28 @@ function pickNearestStation(){
   }
 }
 
+function updateScenarioDescription(){
+  const heavy = $("scenarioSelect").value === "continuous_heavy";
+  $("scenarioDesc").textContent = heavy
+    ? "連續豪雨：每次更新模擬 10 分鐘，雨勢逐步增強；所有數值皆為模擬，非實際預警。"
+    : "一般降雨：保留原始隨機雨量模式；所有數值皆為模擬。";
+}
+
+function simulatedRain(s){
+  const base = getP10Base(s);
+  if($("scenarioSelect").value !== "continuous_heavy"){
+    const bump = (Math.random() < 0.10) ? (8 + Math.random()*18) : (Math.random()*3);
+    return Math.round((base + bump)*10)/10;
+  }
+  const cfg = scenarioConfig;
+  const initial = Number.isFinite(Number(cfg.initialExtraMm)) ? Number(cfg.initialExtraMm) : 2;
+  const growth = Number.isFinite(Number(cfg.growthPerStepMm)) ? Number(cfg.growthPerStepMm) : 0.45;
+  const cap = Number.isFinite(Number(cfg.maxExtraMm)) ? Number(cfg.maxExtraMm) : 15;
+  const jitter = Number.isFinite(Number(cfg.jitterMm)) ? Math.max(0,Number(cfg.jitterMm)) : 0.7;
+  const extra = Math.min(Math.max(0,cap),Math.max(0,initial) + Math.max(0,growth)*Math.max(0,scenarioSteps-1));
+  return Math.round(Math.max(0,base + extra + Math.random()*jitter)*10)/10;
+}
+
 /* =========================
    Tick (update all stations)
 ========================= */
@@ -691,13 +724,10 @@ async function tick(){
     const t = nowMs();
 
     // update all stations (simulate real changes)
+    scenarioSteps++;
     for(const s of stations){
       const id = getStationId(s);
-      const base = getP10Base(s);
-
-      // small bumps, occasional heavy rain (10% chance)
-      const bump = (Math.random() < 0.10) ? (8 + Math.random()*18) : (Math.random()*3);
-      const p10 = Math.round((base + bump) * 10) / 10;
+      const p10 = simulatedRain(s);
 
       histMap[id].push({ ts: t, p10 });
       if(histMap[id].length > 432) histMap[id] = histMap[id].slice(-432);
@@ -711,7 +741,7 @@ async function tick(){
     drawChart();
 
     flashUpdate();
-    logEvent("更新成功：所有站點寫入一筆資料");
+    logEvent(`更新成功：${$("scenarioSelect").selectedOptions[0].textContent}；所有站點寫入一筆資料`);
     setSys("監測中","--ok");
 
   }catch(e){
@@ -760,7 +790,8 @@ function start(){
     siteLat: $("siteLat").value,
     siteLon: $("siteLon").value,
     thY: $("thY").value, thO: $("thO").value, thR: $("thR").value,
-    enableBeep: $("enableBeep").checked
+    enableBeep: $("enableBeep").checked,
+    scenario: $("scenarioSelect").value, scenarioSteps
   });
 }
 
@@ -787,6 +818,7 @@ function clearAll(){
   histMap = {};
   try{ localStorage.removeItem(LS_HIST); }catch{}
   simulationTime = Date.now();
+  scenarioSteps = 0;
   ensureHistForAll();
   $("lastTs").textContent = "—";
   lastRiskText = null;
@@ -821,13 +853,24 @@ async function init(){
       if(cfg.thO!=null) $("thO").value = cfg.thO;
       if(cfg.thR!=null) $("thR").value = cfg.thR;
       if(cfg.enableBeep!=null) $("enableBeep").checked = !!cfg.enableBeep;
+      if(["normal","continuous_heavy"].includes(cfg.scenario)) $("scenarioSelect").value = cfg.scenario;
+      scenarioSteps = Math.max(0,Number(cfg.scenarioSteps)||0);
     }
 
     if(!validateThresholds(false)){ $("thY").value=80; $("thO").value=150; $("thR").value=200; }
+    updateScenarioDescription();
     // events
     $("btnStart").onclick = start;
     $("btnStop").onclick = stop;
     $("btnClear").onclick = clearAll;
+    $("scenarioSelect").onchange = ()=>{
+      // Reset only the scenario ramp, retaining previously collected station history.
+      scenarioSteps = 0;
+      lastRiskText = null;
+      updateScenarioDescription();
+      saveCfg({...(loadCfg()||{}),scenario:$("scenarioSelect").value,scenarioSteps});
+      logEvent(`切換模擬情境：${$("scenarioSelect").selectedOptions[0].textContent}（歷史紀錄保留）`);
+    };
 
     $("btnPickMax").onclick = ()=>{ pickMaxRainStation(); lastRiskText=null; renderSelected(); drawChart(); };
     $("btnPickNear").onclick = ()=>{ pickNearestStation(); lastRiskText=null; renderSelected(); drawChart(); };
