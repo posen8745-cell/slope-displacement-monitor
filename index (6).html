@@ -1,0 +1,921 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>順向坡雨量警戒模擬</title>
+  <style>
+    :root{
+      --bg:#0b1220; --card:#121a2b; --text:#e6eefc; --muted:#a9b7d3; --line:#26314a;
+      --btn:#2a66ff; --danger:#ff4d4f; --warn:#ffb020; --ok:#22c55e; --info:#60a5fa; --yellow:#facc15;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      background:linear-gradient(180deg,#0b1220 0%,#070c16 100%);
+      color:var(--text);
+      font-family:system-ui,-apple-system,"Segoe UI","Noto Sans TC","Microsoft JhengHei",Arial
+    }
+    header{padding:20px 16px 10px;max-width:1100px;margin:0 auto}
+    h1{margin:0 0 6px;font-size:20px}
+    .sub{color:var(--muted);font-size:13px;line-height:1.5}
+    main{
+      max-width:1100px;margin:0 auto;padding:12px 16px 28px;
+      display:grid;grid-template-columns:390px 1fr;gap:14px
+    }
+    @media (max-width:980px){main{grid-template-columns:1fr}}
+    .card{
+      background:rgba(18,26,43,.92);
+      border:1px solid rgba(38,49,74,.9);
+      border-radius:14px;
+      padding:14px;
+      box-shadow:0 10px 28px rgba(0,0,0,.22);
+    }
+    .row{display:flex;gap:10px;align-items:center}
+    .row>*{flex:1}
+    label{display:block;color:var(--muted);font-size:12px;margin:10px 0 6px}
+    input,select{
+      width:100%;
+      background:#0c1324;
+      border:1px solid #24314c;
+      color:var(--text);
+      border-radius:10px;
+      padding:10px;
+      font-size:14px;
+      outline:none;
+    }
+    input:focus,select:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+    button{
+      background:var(--btn);
+      border:none;
+      color:white;
+      padding:10px 12px;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:900;
+      letter-spacing:.2px;
+    }
+    button.secondary{background:#273451}
+    button.danger{background:var(--danger)}
+    button:disabled{opacity:.55;cursor:not-allowed}
+    .pill{
+      display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;
+      border:1px solid #2b395a;background:#0c1324;color:var(--muted);font-size:12px;white-space:nowrap
+    }
+    .statusDot{width:10px;height:10px;border-radius:50%}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+    .kpi{border:1px solid #23304b;border-radius:12px;padding:12px;background:#0c1324}
+    .kpi .t{color:var(--muted);font-size:12px}
+    .kpi .v{font-size:22px;font-weight:950;margin-top:6px}
+    .mono{font-family:ui-monospace,Consolas,monospace}
+    .small{color:var(--muted);font-size:12px;line-height:1.5}
+    .hr{height:1px;background:rgba(38,49,74,.9);margin:12px 0}
+    canvas{width:100%;height:260px;background:#0c1324;border:1px solid #23304b;border-radius:12px}
+    table{width:100%;border-collapse:collapse}
+    th,td{border-bottom:1px solid rgba(38,49,74,.6);padding:8px;font-size:13px}
+    th{color:var(--muted);text-align:left}
+    .right{text-align:right}
+
+    /* ===== Monitoring feel ===== */
+    .pulse{animation:pulse 1.1s infinite ease-in-out}
+    @keyframes pulse{
+      0%{transform:scale(1);opacity:.9}
+      50%{transform:scale(1.45);opacity:1}
+      100%{transform:scale(1);opacity:.9}
+    }
+    .flash{animation:flash 280ms ease-in-out}
+    @keyframes flash{
+      0%{box-shadow:0 0 0 0 rgba(96,165,250,0)}
+      30%{box-shadow:0 0 0 6px rgba(96,165,250,.18)}
+      100%{box-shadow:0 0 0 0 rgba(96,165,250,0)}
+    }
+    .badge{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:6px 10px;border-radius:999px;
+      border:1px solid #2b395a;background:#0c1324;
+      color:var(--muted);font-size:12px;white-space:nowrap
+    }
+    .progress{
+      height:6px;border-radius:999px;overflow:hidden;
+      background:rgba(38,49,74,.65);border:1px solid rgba(38,49,74,.9)
+    }
+    .progress > div{
+      height:100%;
+      width:0%;
+      background:rgba(96,165,250,.95);
+      transition:width .25s linear
+    }
+    .logbox{
+      margin-top:10px;
+      border:1px solid rgba(38,49,74,.9);
+      background:#0c1324;
+      border-radius:12px;
+      padding:10px;
+      max-height:170px;
+      overflow:auto;
+    }
+    .logline{
+      font-size:12px;
+      color:var(--muted);
+      padding:4px 0;
+      border-bottom:1px solid rgba(38,49,74,.35);
+    }
+    .logline:last-child{border-bottom:none}
+    .switch{
+      display:flex;gap:10px;align-items:center;
+      border:1px solid rgba(38,49,74,.9);
+      background:#0c1324;border-radius:12px;padding:10px
+    }
+    .switch input{width:auto}
+  </style>
+</head>
+
+<body>
+<header>
+  <h1>順向坡雨量警戒模擬</h1>
+  <div class="sub">
+    基隆常下雨，我想試著把雨量的變化，做成比較容易看懂的提醒。<br/>
+    按「開始模擬」，看雨量累積後，提示怎麼從綠色變成黃、橘、紅色。<br/>
+    這裡使用模擬雨量，沒有接上實際儀器，燈號不能用來判斷坡地是否安全。
+  </div>
+  <p class="small" style="margin:10px 0 0">製作方式：想法與功能需求由我提出，網頁程式由 AI 依需求完成。我透過查看畫面、回饋修改，逐步理解模擬的做法。</p>
+</header>
+
+<main>
+  <!-- LEFT -->
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <div class="pill"><span class="statusDot" id="sysDot" style="background:var(--info)"></span><span id="sysText">尚未開始</span></div>
+      <div class="pill">紀錄存於本機</div>
+    </div>
+
+    <label>參考位置（用來找最近的模擬站）</label>
+    <div class="grid2">
+      <input id="siteLat" type="number" step="0.000001" placeholder="緯度，例如 25.0330" />
+      <input id="siteLon" type="number" step="0.000001" placeholder="經度，例如 121.5654" />
+    </div>
+
+    <label>選擇模擬站</label>
+    <select id="stationSelect"></select>
+
+    <div class="row" style="margin-top:10px">
+      <button class="secondary" id="btnPickMax">選雨量最多的站</button>
+      <button class="secondary" id="btnPickNear">找最近的模擬站</button>
+    </div>
+
+    <label>降雨模擬情境</label>
+    <select id="scenarioSelect">
+      <option value="normal">一般降雨</option>
+      <option value="continuous_heavy" selected>連續豪雨</option>
+    </select>
+    <div class="small" id="scenarioDesc" style="margin-top:6px">雨勢會逐步增強，方便觀察雨量累積後的提示變化；數字都是模擬的。</div>
+
+    <label>畫面多久更新一次（一次代表 10 分鐘）</label>
+    <select id="pollSec">
+      <option value="10">每 10 秒（快速看變化）</option>
+      <option value="60">每 60 秒</option>
+      <option value="300">每 5 分鐘</option>
+      <option value="600" selected>每 10 分鐘</option>
+    </select>
+
+    <label>提醒門檻（24 小時累積雨量，mm）</label>
+    <div class="grid3">
+      <div><div class="small">黃色 ≥</div><input id="thY" type="number" value="80"/></div>
+      <div><div class="small">橘色 ≥</div><input id="thO" type="number" value="150"/></div>
+      <div><div class="small">紅色 ≥</div><input id="thR" type="number" value="200"/></div>
+    </div>
+
+    <label>提示設定</label>
+    <div class="switch">
+      <input type="checkbox" id="enableBeep" checked />
+      <div class="small" style="margin:0">
+        提示升級時發出聲音（需先點按鈕啟用）
+      </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <div class="row">
+      <button id="btnStart">開始模擬</button>
+      <button class="secondary" id="btnStop" disabled>停止</button>
+      <button class="danger" id="btnClear">清除紀錄</button>
+    </div>
+
+    <div class="small" style="margin-top:10px">
+      每次更新會替所有模擬站新增一筆紀錄。想快點看到變化，可以選「每 10 秒」。
+    </div>
+  </section>
+
+  <!-- RIGHT -->
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <div class="pill"><span class="statusDot" id="riskDot" style="background:var(--ok)"></span><span id="riskText">—</span></div>
+      <div class="pill">雨量累積 → 門檻提醒</div>
+    </div>
+
+    <div class="small" style="margin-top:8px">
+      目前的模擬站：<span class="mono" id="curStation">—</span>　
+      模擬資料時間：<span class="mono" id="lastTs">—</span>
+    </div>
+
+    <!-- Monitoring feel widgets -->
+    <div class="row" style="margin-top:10px; justify-content:space-between">
+      <div class="badge">
+        <span class="statusDot" id="hbDot" style="background:var(--ok)"></span>
+        <span id="hbText">待命</span>
+      </div>
+      <div class="badge mono">
+        下次更新倒數：<span id="countdown">—</span>
+      </div>
+    </div>
+
+    <div class="progress" style="margin-top:10px">
+      <div id="progBar"></div>
+    </div>
+
+    <div class="logbox" id="logBox" aria-label="事件紀錄"></div>
+
+    <div class="hr"></div>
+
+    <div class="grid3">
+      <div class="kpi"><div class="t">這次 10 分鐘雨量</div><div class="v"><span id="k10">—</span> mm</div></div>
+      <div class="kpi"><div class="t">近 24 小時累積</div><div class="v"><span id="k24">—</span> mm</div></div>
+      <div class="kpi"><div class="t">近 72 小時累積</div><div class="v"><span id="k72">—</span> mm</div></div>
+    </div>
+
+    <div class="hr"></div>
+
+    <p class="small">每次更新代表模擬 10 分鐘；紀錄還沒滿 24 或 72 小時時，只顯示目前已有的累積量。</p>
+    <div class="small">各站每次的雨量變化（保留近 24 小時紀錄）</div>
+    <canvas id="chart" width="1200" height="300"></canvas>
+
+    <div class="hr"></div>
+
+    <div class="small" style="margin-bottom:8px">各站雨量比較</div>
+    <table>
+      <thead>
+        <tr>
+          <th>站點編號</th>
+          <th>站名</th>
+          <th class="right">10 分鐘</th>
+          <th class="right">24 小時</th>
+          <th class="right">還差多少達到黃色提醒</th>
+        </tr>
+      </thead>
+      <tbody id="cmpBody"></tbody>
+    </table>
+
+    <div class="hr"></div>
+
+    <div class="small" style="margin-bottom:8px">這個站最近 12 次的紀錄（最新在上）</div>
+    <table>
+      <thead><tr><th>時間</th><th class="right">10 分鐘</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+/* =========================
+   Helpers + storage
+========================= */
+const $ = (id)=>document.getElementById(id);
+const LS_CFG  = "monitor_cfg_v2";
+const LS_HIST = "monitor_hist_v3_sim10min"; // { [StationId]: [{ts,p10}] }
+
+let stations = [];
+let histMap = {};
+let timer = null;
+let activePollMs = 600000;
+let simulationTime = Date.now();
+let scenarioSteps = 0;
+let scenarioConfig = {};
+
+// monitoring feel state
+let nextTickAt = null;
+let countdownTimer = null;
+let lastRiskText = null;
+
+function nowMs(){ return simulationTime; }
+function esc(value){ return String(value).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function fmt(n,d=1){ return Number.isFinite(n) ? n.toFixed(d) : "—"; }
+
+function loadCfg(){
+  try{ return JSON.parse(localStorage.getItem(LS_CFG)||"null"); }catch{ return null; }
+}
+function saveCfg(cfg){ try{ localStorage.setItem(LS_CFG, JSON.stringify(cfg)); }catch{ logEvent("設定無法儲存，仍可繼續使用本頁"); } }
+function loadHist(){
+  try{ return JSON.parse(localStorage.getItem(LS_HIST)||"{}"); }catch{ return {}; }
+}
+function saveHist(){ try{ localStorage.setItem(LS_HIST, JSON.stringify(histMap)); }catch{ logEvent("歷史無法儲存，資料暫存在本頁"); } }
+
+function setSys(text, cssVar){
+  $("sysText").textContent = text;
+  $("sysDot").style.background = `var(${cssVar})`;
+}
+function setRisk(text, cssVar){
+  $("riskText").textContent = text;
+  $("riskDot").style.background = `var(${cssVar})`;
+}
+
+function logEvent(msg){
+  const box = $("logBox");
+  if(!box) return;
+  const t = new Date().toLocaleTimeString();
+  const div = document.createElement("div");
+  div.className = "logline mono";
+  div.textContent = `[${t}] ${msg}`;
+  box.prepend(div);
+  while(box.childElementCount > 20) box.removeChild(box.lastElementChild);
+}
+
+function setHeartbeat(running){
+  const dot = $("hbDot");
+  const text = $("hbText");
+  if(!dot || !text) return;
+  if(running){
+    dot.classList.add("pulse");
+    text.textContent = "模擬中";
+  }else{
+    dot.classList.remove("pulse");
+    text.textContent = "待命";
+  }
+}
+
+function updateCountdown(){
+  const el = $("countdown");
+  const bar = $("progBar");
+  const pollMs = activePollMs;
+
+  if(!el || !bar) return;
+
+  if(!nextTickAt){
+    el.textContent = "—";
+    bar.style.width = "0%";
+    return;
+  }
+  const remain = Math.max(0, nextTickAt - Date.now());
+  const mm = String(Math.floor(remain/60000)).padStart(2,"0");
+  const ss = String(Math.floor((remain%60000)/1000)).padStart(2,"0");
+  el.textContent = `${mm}:${ss}`;
+
+  const done = Math.min(1, Math.max(0, 1 - (remain / pollMs)));
+  bar.style.width = `${Math.round(done*100)}%`;
+}
+
+function flashUpdate(){
+  const canvas = $("chart");
+  if(!canvas) return;
+  canvas.classList.remove("flash");
+  void canvas.offsetWidth;
+  canvas.classList.add("flash");
+}
+
+function beep(){
+  if(!$("enableBeep")?.checked) return;
+  try{
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = "sine";
+    o.frequency.value = 880;
+    g.gain.value = 0.04;
+    o.start();
+    setTimeout(()=>{ o.stop(); ctx.close(); }, 130);
+  }catch{}
+}
+
+/* =========================
+   Fetch mock json
+========================= */
+async function fetchStationsFromMock(){
+  try {
+    const res = await fetch("./mock_cwa.json", { cache:"no-store", signal: AbortSignal.timeout(8000) });
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    scenarioConfig = json?.simulation?.continuous_heavy || {};
+    const arr = json?.records?.Station;
+    if(!Array.isArray(arr) || !arr.length) throw new Error("沒有站點");
+    const seen = new Set();
+    const valid = arr.filter(s=>s && typeof s === 'object' && getStationId(s) && !seen.has(getStationId(s)) && seen.add(getStationId(s)));
+    if(!valid.length) throw new Error("沒有有效站點編號");
+    logEvent("已載入模擬站，接下來的雨量由程式產生。");
+    return valid;
+  } catch(e) {
+    scenarioConfig = {};
+    logEvent("找不到站點設定，先使用內建的模擬站。");
+    return [
+      {StationId:'DEMO01',StationName:'虛構示範站A',Latitude:25.03,Longitude:121.56,Precipitation:1},
+      {StationId:'DEMO02',StationName:'虛構示範站B',Latitude:25.08,Longitude:121.60,Precipitation:2},
+      {StationId:'DEMO03',StationName:'虛構示範站C',Latitude:24.98,Longitude:121.52,Precipitation:0.5}
+    ];
+  }
+}
+function coordinate(s, axis){
+  const coords = s?.GeoInfo?.Coordinates;
+  const geo = Array.isArray(coords) ? (coords.find(c=>c.CoordinateName === 'WGS84') || coords[0]) : coords;
+  const v = axis === 'lat' ? (s.Latitude ?? s.Lat ?? geo?.StationLatitude ?? geo?.Latitude) : (s.Longitude ?? s.Lon ?? geo?.StationLongitude ?? geo?.Longitude);
+  if(v == null || String(v).trim() === '') return NaN;
+  const n = Number(v), limit = axis === 'lat' ? 90 : 180;
+  return Number.isFinite(n) && Math.abs(n)<=limit ? n : NaN;
+}
+
+function getStationId(s){ return String(s.StationId || s.StationID || "").trim(); }
+function getStationName(s){ return String(s.StationName || "").trim(); }
+function getLat(s){ return coordinate(s,'lat'); }
+function getLon(s){ return coordinate(s,'lon'); }
+function getP10Base(s){
+  const v = s?.RainfallElement?.Now?.Precipitation ?? s?.Precipitation ?? 0;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+/* =========================
+   Analytics
+========================= */
+function sumWindow(points, windowMs, tNow){
+  const t0 = tNow - windowMs;
+  let s = 0;
+  for(let i = points.length-1; i>=0; i--){
+    const it = points[i];
+    if(it.ts <= t0) break;
+    if(it.ts > tNow) continue;
+    s += it.p10;
+  }
+  return s;
+}
+
+function validateThresholds(show=true){
+  const vals=['thY','thO','thR'].map(id=>$(id).value.trim()==='' ? NaN : Number($(id).value));
+  const valid=vals.every(Number.isFinite) && vals[0]>0 && vals[0]<vals[1] && vals[1]<vals[2];
+  if(!valid && show) alert('門檻需為正數，且黃色 < 橘色 < 紅色');
+  return valid;
+}
+function classifyByR24(r24){
+  if(!validateThresholds(false)) return {text:"門檻設定錯誤",color:"--danger"};
+  const y = Number($("thY").value||80);
+  const o = Number($("thO").value||150);
+  const r = Number($("thR").value||200);
+  if(r24 >= r) return {text:"紅色提醒", color:"--danger"};
+  if(r24 >= o) return {text:"橘色提醒", color:"--warn"};
+  if(r24 >= y) return {text:"黃色提醒", color:"--yellow"};
+  return {text:"綠色（未達提醒門檻）", color:"--ok"};
+}
+
+/* =========================
+   UI rendering
+========================= */
+function populateSelect(){
+  const sel = $("stationSelect");
+  sel.innerHTML = "";
+  for(const s of stations){
+    const id = getStationId(s);
+    const name = getStationName(s) || id;
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = `${id} — ${name}`;
+    sel.appendChild(opt);
+  }
+}
+
+function currentStationId(){ return $("stationSelect").value; }
+
+function ensureHistForAll(){
+  for(const s of stations){
+    const id = getStationId(s);
+    if(!Array.isArray(histMap[id])) histMap[id] = [];
+    histMap[id] = histMap[id].filter(p=>p && Number.isFinite(p.ts) && Number.isFinite(p.p10) && p.p10>=0).sort((a,b)=>a.ts-b.ts).filter((p,i,a)=>i===0 || p.ts!==a[i-1].ts).slice(-432);
+  }
+}
+
+function renderSelected(){
+  const sid = currentStationId();
+  const pts = histMap[sid] || [];
+  const tNow = nowMs();
+
+  const last = pts.at(-1);
+  const p10 = last ? last.p10 : NaN;
+  const r24 = sumWindow(pts, 24*3600*1000, tNow);
+  const r72 = sumWindow(pts, 72*3600*1000, tNow);
+
+  $("k10").textContent = fmt(p10,1);
+  $("k24").textContent = pts.length ? fmt(r24,1) : "—";
+  $("k72").textContent = pts.length ? fmt(r72,1) : "—";
+
+  const st = stations.find(x=>getStationId(x)===sid);
+  $("curStation").textContent = st ? `${sid} — ${getStationName(st)}` : sid;
+
+  const risk = pts.length ? classifyByR24(r24) : {text:"尚無資料",color:"--info"};
+  setRisk(risk.text, risk.color);
+
+  // risk change log + beep (optional)
+  const cur = risk.text;
+  if(lastRiskText && cur !== lastRiskText){
+    logEvent(`提示變更：${lastRiskText} → ${cur}`);
+    const rank = t=>t.startsWith("紅")?3:t.startsWith("橘")?2:t.startsWith("黃")?1:0;
+    if(rank(cur)>rank(lastRiskText)) beep();
+  }
+  lastRiskText = cur;
+
+  // last 12 table
+  const rows = pts.slice(-12).reverse().map(it=>{
+    return `<tr><td class="mono">${new Date(it.ts).toLocaleString()}</td><td class="right mono">${fmt(it.p10,1)}</td></tr>`;
+  }).join("");
+  $("tbody").innerHTML = rows;
+}
+
+function renderCompare(){
+  const tNow = nowMs();
+  const y = Number($("thY").value||80);
+
+  const rows = stations.map(s=>{
+    const id = getStationId(s);
+    const name = getStationName(s);
+    const pts = histMap[id] || [];
+    const last = pts.at(-1);
+    const p10 = last ? last.p10 : NaN;
+    const r24 = sumWindow(pts, 24*3600*1000, tNow);
+    const remain = Math.max(0, y - r24);
+    return { id, name, p10, r24, remain };
+  }).sort((a,b)=> (b.r24 - a.r24) || (b.p10 - a.p10));
+
+  $("cmpBody").innerHTML = rows.map(r=>`
+    <tr>
+      <td class="mono">${esc(r.id)}</td>
+      <td>${esc(r.name)}</td>
+      <td class="right mono">${fmt(r.p10,1)}</td>
+      <td class="right mono">${fmt(r.r24,1)}</td>
+      <td class="right mono">${fmt(r.remain,1)} mm</td>
+    </tr>
+  `).join("");
+}
+
+function drawChart(){
+  const c = $("chart");
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  ctx.clearRect(0,0,W,H);
+
+  ctx.strokeStyle = "rgba(38,49,74,.9)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0.5,0.5,W-1,H-1);
+
+  const tNow = nowMs();
+  const t0 = tNow - 24*3600*1000;
+
+  const series = stations.map(s=>{
+    const id = getStationId(s);
+    const pts = (histMap[id] || []).filter(p=>p.ts>=t0);
+    return { id, name:getStationName(s), pts };
+  });
+
+  const allPts = series.flatMap(s=>s.pts);
+  if(!series.some(s=>s.pts.length >= 2)){
+    ctx.fillStyle = "rgba(169,183,211,.8)";
+    ctx.font = "16px system-ui";
+    ctx.fillText("資料不足（至少需要 2 筆以上才會畫出曲線）", 16, 40);
+    return;
+  }
+
+  const minT = Math.min(...allPts.map(p=>p.ts));
+  const maxT = Math.max(...allPts.map(p=>p.ts));
+  const maxP = Math.max(...allPts.map(p=>p.p10), 5);
+
+  const padL=56, padR=12, padT=18, padB=30;
+  const x0=padL, y0=padT, x1=W-padR, y1=H-padB;
+
+  function X(ts){ return x0 + ((ts-minT)/((maxT-minT)||1))*(x1-x0); }
+  function Y(p){ return y1 - (p/maxP)*(y1-y0); }
+
+  // y grid
+  ctx.strokeStyle = "rgba(38,49,74,.5)";
+  ctx.fillStyle = "rgba(169,183,211,.75)";
+  ctx.font = "12px ui-monospace, monospace";
+  for(let i=0;i<=4;i++){
+    const y = y1 - (i/4)*(y1-y0);
+    ctx.beginPath(); ctx.moveTo(x0,y); ctx.lineTo(x1,y); ctx.stroke();
+    ctx.fillText(((i/4)*maxP).toFixed(1), 10, y+4);
+  }
+
+  const colors = [
+    "rgba(96,165,250,.95)",
+    "rgba(34,197,94,.95)",
+    "rgba(255,176,32,.95)",
+    "rgba(255,77,79,.95)"
+  ];
+
+  // legend
+  ctx.font = "12px system-ui";
+  let lx = x0, ly = 16;
+
+  series.forEach((s, idx)=>{
+    if(s.pts.length < 2) return;
+    const col = colors[idx % colors.length];
+
+    // line
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(X(s.pts[0].ts), Y(s.pts[0].p10));
+    for(let i=1;i<s.pts.length;i++) ctx.lineTo(X(s.pts[i].ts), Y(s.pts[i].p10));
+    ctx.stroke();
+
+    // legend
+    ctx.fillStyle = col;
+    ctx.fillRect(lx, ly-8, 12, 3);
+    ctx.fillStyle = "rgba(230,238,252,.9)";
+    ctx.fillText(`${s.id}`, lx+16, ly-5);
+    lx += 90;
+  });
+
+  // x labels
+  ctx.fillStyle = "rgba(169,183,211,.75)";
+  const tA = new Date(minT), tB = new Date(maxT);
+  const fmtHM = (d)=> `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+  ctx.fillText(fmtHM(tA), x0, H-10);
+  ctx.fillText(fmtHM(tB), x1-46, H-10);
+
+  // title
+  ctx.fillStyle = "rgba(230,238,252,.9)";
+  ctx.font = "14px system-ui";
+  ctx.fillText("近 24 小時：各站每次模擬更新 的 10min 雨量（mm）", x0, 26);
+}
+
+/* =========================
+   Auto pick
+========================= */
+function haversineKm(lat1, lon1, lat2, lon2){
+  const R = 6371;
+  const toRad = (x)=> x*Math.PI/180;
+  const dLat = toRad(lat2-lat1);
+  const dLon = toRad(lon2-lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+
+function pickMaxRainStation(){
+  const tNow = nowMs();
+  let best = null;
+  for(const s of stations){
+    const id = getStationId(s);
+    const pts = histMap[id] || [];
+    const r24 = sumWindow(pts, 24*3600*1000, tNow);
+    const p10 = pts.at(-1)?.p10 ?? -1;
+    const key = r24*1000 + p10;
+    if(!best || r24 > best.r24 || (r24 === best.r24 && p10 > best.p10)) best = { id, key, r24, p10 };
+  }
+  if(best){
+    $("stationSelect").value = best.id;
+    logEvent(`自動選站：最大雨量 → ${best.id}（24h=${fmt(best.r24,1)} / 10min=${fmt(best.p10,1)}）`);
+  }
+}
+
+function pickNearestStation(){
+  const lat = Number($("siteLat").value);
+  const lon = Number($("siteLon").value);
+  if(!$("siteLat").value.trim() || !$("siteLon").value.trim() || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat)>90 || Math.abs(lon)>180){
+    alert("請先填緯度與經度，或改用「選雨量最多的站」。");
+    return;
+  }
+  let best = null;
+  for(const s of stations){
+    const slat = getLat(s), slon = getLon(s);
+    if(!Number.isFinite(slat) || !Number.isFinite(slon)) continue;
+    const d = haversineKm(lat, lon, slat, slon);
+    if(!best || d < best.d) best = { id:getStationId(s), d };
+  }
+  if(best){
+    $("stationSelect").value = best.id;
+    logEvent(`自動選站：最近站 → ${best.id}（距離約 ${best.d.toFixed(2)} km）`);
+  }else{
+    alert("目前沒有站點座標，無法計算最近的站。");
+  }
+}
+
+function updateScenarioDescription(){
+  const heavy = $("scenarioSelect").value === "continuous_heavy";
+  $("scenarioDesc").textContent = heavy
+    ? "雨勢會逐步增強，方便觀察雨量累積後的提示變化；數字都是模擬的。"
+    : "每次產生不同的模擬雨量，觀察一般降雨時的變化。";
+}
+
+function simulatedRain(s){
+  const base = getP10Base(s);
+  if($("scenarioSelect").value !== "continuous_heavy"){
+    const bump = (Math.random() < 0.10) ? (8 + Math.random()*18) : (Math.random()*3);
+    return Math.round((base + bump)*10)/10;
+  }
+  const cfg = scenarioConfig;
+  const initial = Number.isFinite(Number(cfg.initialExtraMm)) ? Number(cfg.initialExtraMm) : 2;
+  const growth = Number.isFinite(Number(cfg.growthPerStepMm)) ? Number(cfg.growthPerStepMm) : 0.45;
+  const cap = Number.isFinite(Number(cfg.maxExtraMm)) ? Number(cfg.maxExtraMm) : 15;
+  const jitter = Number.isFinite(Number(cfg.jitterMm)) ? Math.max(0,Number(cfg.jitterMm)) : 0.7;
+  const extra = Math.min(Math.max(0,cap),Math.max(0,initial) + Math.max(0,growth)*Math.max(0,scenarioSteps-1));
+  return Math.round(Math.max(0,base + extra + Math.random()*jitter)*10)/10;
+}
+
+/* =========================
+   Tick (update all stations)
+========================= */
+async function tick(){
+  try{
+    setSys("產生模擬雨量…","--info");
+    simulationTime += 600000;
+    const t = nowMs();
+
+    // update all stations (simulate real changes)
+    scenarioSteps++;
+    for(const s of stations){
+      const id = getStationId(s);
+      const p10 = simulatedRain(s);
+
+      histMap[id].push({ ts: t, p10 });
+      if(histMap[id].length > 432) histMap[id] = histMap[id].slice(-432);
+    }
+
+    saveHist();
+    $("lastTs").textContent = new Date(t).toLocaleString();
+
+    renderSelected();
+    renderCompare();
+    drawChart();
+
+    flashUpdate();
+    logEvent(`更新成功：${$("scenarioSelect").selectedOptions[0].textContent}；所有站點寫入一筆資料`);
+    setSys("模擬中","--ok");
+
+  }catch(e){
+    setSys(`錯誤：${e?.message || e}`,"--danger");
+    logEvent(`錯誤：${e?.message || e}`);
+  }
+}
+
+/* =========================
+   Start/Stop/Clear
+========================= */
+function start(){
+  if(!validateThresholds()) return;
+  const pollMs = Math.max(10, Math.min(3600, Number($("pollSec").value)||600)) * 1000;
+  activePollMs = pollMs;
+
+  // stop old timers
+  if(timer) clearInterval(timer);
+  if(countdownTimer) clearInterval(countdownTimer);
+
+  // UI
+  $("btnStart").disabled = true;
+  $("btnStop").disabled = false;
+
+  setHeartbeat(true);
+  logEvent(`開始模擬（每 ${Math.round(pollMs/1000)} 秒）`);
+
+  // run once
+  tick();
+
+  // countdown
+  nextTickAt = Date.now() + pollMs;
+  updateCountdown();
+  countdownTimer = setInterval(updateCountdown, 250);
+
+  // interval
+  timer = setInterval(()=>{
+    tick();
+    nextTickAt = Date.now() + pollMs;
+  }, pollMs);
+
+  // save cfg
+  saveCfg({
+    stationId: currentStationId(),
+    pollSec: Number($("pollSec").value)||600,
+    siteLat: $("siteLat").value,
+    siteLon: $("siteLon").value,
+    thY: $("thY").value, thO: $("thO").value, thR: $("thR").value,
+    enableBeep: $("enableBeep").checked,
+    scenario: $("scenarioSelect").value, scenarioSteps
+  });
+}
+
+function stop(){
+  if(timer) clearInterval(timer);
+  timer = null;
+
+  if(countdownTimer) clearInterval(countdownTimer);
+  countdownTimer = null;
+
+  nextTickAt = null;
+  updateCountdown();
+
+  $("btnStart").disabled = false;
+  $("btnStop").disabled = true;
+
+  setHeartbeat(false);
+  setSys("已停止","--warn");
+  logEvent("停止模擬");
+}
+
+function clearAll(){
+  if(!confirm("要清除這個瀏覽器裡所有模擬站的紀錄嗎？")) return;
+  histMap = {};
+  try{ localStorage.removeItem(LS_HIST); }catch{}
+  simulationTime = Date.now();
+  scenarioSteps = 0;
+  ensureHistForAll();
+  $("lastTs").textContent = "—";
+  lastRiskText = null;
+  renderSelected(); renderCompare(); drawChart();
+  setSys(timer ? "模擬中（歷史已清除）" : "已清除","--warn");
+  logEvent("已清除紀錄");
+}
+
+/* =========================
+   Init
+========================= */
+async function init(){
+  try{
+    setSys("載入站點…","--info");
+    stations = await fetchStationsFromMock();
+
+    histMap = loadHist();
+    if(!histMap || typeof histMap !== "object" || Array.isArray(histMap)) histMap = {};
+    ensureHistForAll();
+    const times = Object.values(histMap).flat().map(p=>p.ts).filter(Number.isFinite);
+    simulationTime = times.length ? Math.max(...times) : Date.now();
+    populateSelect();
+
+    // load cfg
+    const cfg = loadCfg();
+    if(cfg){
+      if(cfg.stationId && stations.some(s=>getStationId(s)===cfg.stationId)) $("stationSelect").value = cfg.stationId;
+      if(cfg.pollSec) $("pollSec").value = String(cfg.pollSec);
+      if(cfg.siteLat!=null) $("siteLat").value = cfg.siteLat;
+      if(cfg.siteLon!=null) $("siteLon").value = cfg.siteLon;
+      if(cfg.thY!=null) $("thY").value = cfg.thY;
+      if(cfg.thO!=null) $("thO").value = cfg.thO;
+      if(cfg.thR!=null) $("thR").value = cfg.thR;
+      if(cfg.enableBeep!=null) $("enableBeep").checked = !!cfg.enableBeep;
+      if(["normal","continuous_heavy"].includes(cfg.scenario)) $("scenarioSelect").value = cfg.scenario;
+      scenarioSteps = Math.max(0,Number(cfg.scenarioSteps)||0);
+    }
+
+    if(!validateThresholds(false)){ $("thY").value=80; $("thO").value=150; $("thR").value=200; }
+    updateScenarioDescription();
+    // events
+    $("btnStart").onclick = start;
+    $("btnStop").onclick = stop;
+    $("btnClear").onclick = clearAll;
+    $("scenarioSelect").onchange = ()=>{
+      // Reset only the scenario ramp, retaining previously collected station history.
+      scenarioSteps = 0;
+      lastRiskText = null;
+      updateScenarioDescription();
+      saveCfg({...(loadCfg()||{}),scenario:$("scenarioSelect").value,scenarioSteps});
+      logEvent(`切換模擬情境：${$("scenarioSelect").selectedOptions[0].textContent}（歷史紀錄保留）`);
+    };
+
+    $("btnPickMax").onclick = ()=>{ pickMaxRainStation(); lastRiskText=null; renderSelected(); drawChart(); };
+    $("btnPickNear").onclick = ()=>{ pickNearestStation(); lastRiskText=null; renderSelected(); drawChart(); };
+
+    $("stationSelect").onchange = ()=>{
+      saveCfg({ ...(loadCfg()||{}), stationId: currentStationId() });
+      logEvent(`切換選站：${currentStationId()}`);
+      lastRiskText = null;
+      renderSelected(); drawChart();
+    };
+
+    ["thY","thO","thR"].forEach(id=>{
+      $(id).onchange = ()=>{
+        if(!validateThresholds()) return;
+        saveCfg({...(loadCfg()||{}),thY:$("thY").value,thO:$("thO").value,thR:$("thR").value});
+        logEvent(`門檻更新：Y=${$("thY").value} O=${$("thO").value} R=${$("thR").value}`);
+        renderSelected(); renderCompare();
+      };
+    });
+
+    $("pollSec").onchange = ()=>{
+      if(timer) start();
+      else saveCfg({...(loadCfg()||{}),pollSec:Number($("pollSec").value)});
+      logEvent(`更新頻率已改為：每 ${$("pollSec").value} 秒`);
+    };
+
+    // initial UI
+    $("lastTs").textContent = "—";
+    renderSelected();
+    renderCompare();
+    drawChart();
+
+    setHeartbeat(false);
+    setSys("尚未開始","--info");
+    logEvent("頁面已就緒");
+
+  }catch(e){
+    setSys(`錯誤：${e?.message || e}`,"--danger");
+  }
+}
+
+init();
+</script>
+</body>
+</html>
+
